@@ -9,29 +9,55 @@ import {
 } from "lucide-react";
 
 import MapView from "./components/MapView";
+import LocationSearch from "./components/LocationSearch";
 
 export default function App() {
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
+  const [focusPoint, setFocusPoint] = useState(null);
 
   function handleMapClick(coordinates) {
+    const selectedPoint = {
+      name: "Map-selected point",
+      coordinates,
+    };
+
     if (!origin || (origin && destination)) {
-      setOrigin(coordinates);
+      setOrigin(selectedPoint);
       setDestination(null);
     } else {
-      setDestination(coordinates);
+      setDestination(selectedPoint);
     }
+
+    setFocusPoint(coordinates);
+  }
+
+  function handleSearchSelection(type, location) {
+    if (type === "origin") {
+      setOrigin(location);
+    } else {
+      setDestination(location);
+    }
+
+    setFocusPoint(location.coordinates);
   }
 
   function resetLocations() {
     setOrigin(null);
     setDestination(null);
+    setFocusPoint(null);
   }
 
-  function formatCoordinates(coordinates) {
-    if (!coordinates) return "Not selected";
+  function formatCoordinates(location) {
+    if (!location) return "Not selected";
 
-    return `${coordinates[0].toFixed(5)}, ${coordinates[1].toFixed(5)}`;
+    const [lat, lng] = location.coordinates;
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
+
+  function displayName(location) {
+    if (!location) return "Not selected";
+    return location.name;
   }
 
   return (
@@ -65,8 +91,8 @@ export default function App() {
           </h2>
 
           <p className="mt-3 leading-7 text-slate-600">
-            Select your starting point and destination on the map.
-            We'll add route distance and estimated bus fare next.
+            Search for a place or select locations directly on the map.
+            We'll add road distance and fare calculation next.
           </p>
         </div>
 
@@ -74,9 +100,9 @@ export default function App() {
           <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3 px-2 pt-2">
               <div>
-                <h3 className="font-semibold">Choose your locations</h3>
+                <h3 className="font-semibold">Interactive map</h3>
                 <p className="mt-1 text-sm text-slate-500">
-                  Click two points on the map.
+                  Click two points to select your journey.
                 </p>
               </div>
 
@@ -92,17 +118,20 @@ export default function App() {
             <MapView
               origin={origin}
               destination={destination}
+              focusPoint={focusPoint}
               onMapClick={handleMapClick}
             />
 
             <p className="px-2 pb-1 pt-3 text-xs leading-5 text-slate-500">
-              Map data © OpenStreetMap contributors. Location selection
-              is a prototype and does not yet calculate a road route.
+              Map data © OpenStreetMap contributors. Search results and
+              map-selected points are not necessarily official bus stops.
             </p>
           </section>
 
-          <section className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="space-y-4">
+            <LocationSearch onSelectLocation={handleSearchSelection} />
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2">
                 <MapPin className="text-emerald-600" size={20} />
                 <h3 className="font-semibold">Your journey</h3>
@@ -114,10 +143,10 @@ export default function App() {
                     Starting point
                   </p>
                   <p className="mt-2 break-words text-sm text-slate-700">
-                    {formatCoordinates(origin)}
+                    {displayName(origin)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {origin ? "Location selected" : "Click the map to select"}
+                    {formatCoordinates(origin)}
                   </p>
                 </div>
 
@@ -126,12 +155,10 @@ export default function App() {
                     Destination
                   </p>
                   <p className="mt-2 break-words text-sm text-slate-700">
-                    {formatCoordinates(destination)}
+                    {displayName(destination)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {destination
-                      ? "Location selected"
-                      : "Click the map a second time"}
+                    {formatCoordinates(destination)}
                   </p>
                 </div>
               </div>
@@ -143,23 +170,24 @@ export default function App() {
                 />
                 <p className="text-sm leading-6 text-slate-600">
                   {!origin
-                    ? "Step 1: Select your starting point."
+                    ? "Choose a starting point using search or the map."
                     : !destination
-                      ? "Step 2: Select your destination."
-                      : "Both locations are selected. You're ready for the next step!"}
+                      ? "Now choose your destination using search or the map."
+                      : "Both locations are selected. Next, we'll calculate the road distance."}
                 </p>
               </div>
-            </div>
+            </section>
 
-            <div className="rounded-2xl bg-slate-900 p-5 text-white">
-              <p className="text-sm text-slate-300">Estimated journey fare</p>
+            <section className="rounded-2xl bg-slate-900 p-5 text-white">
+              <p className="text-sm text-slate-300">
+                Estimated journey fare
+              </p>
               <p className="mt-2 text-3xl font-bold">৳ --</p>
               <p className="mt-2 text-sm leading-6 text-slate-300">
-                Your fare will appear here after we implement road routing
-                and the fare calculation rules.
+                Fare calculation will be added after road routing.
               </p>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </section>
     </main>
