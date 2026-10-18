@@ -11,10 +11,13 @@ import {
   MapPinned,
   ArrowRight,
   Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 
 import MapView from "./components/MapView";
 import LocationSearch from "./components/LocationSearch";
+import FareSummary from "./components/FareSummary";
+import { fareRates } from "./data/fareRates";
 
 export default function App() {
   const [origin, setOrigin] = useState(null);
@@ -27,7 +30,11 @@ export default function App() {
   const [routeStatus, setRouteStatus] = useState("idle");
   const [routeError, setRouteError] = useState("");
 
-  // Calculate a road route when both locations are selected.
+  const [selectedCategory, setSelectedCategory] = useState(
+    fareRates[0]?.id ?? ""
+  );
+
+  // Calculate the road route whenever the selected locations change.
   useEffect(() => {
     if (!origin || !destination) {
       setRouteCoordinates([]);
@@ -35,6 +42,22 @@ export default function App() {
       setDurationMinutes(null);
       setRouteStatus("idle");
       setRouteError("");
+      return;
+    }
+
+    // Avoid requesting a route from a point to itself.
+    const sameLocation =
+      origin.coordinates[0] === destination.coordinates[0] &&
+      origin.coordinates[1] === destination.coordinates[1];
+
+    if (sameLocation) {
+      setRouteCoordinates([]);
+      setDistanceKm(null);
+      setDurationMinutes(null);
+      setRouteStatus("error");
+      setRouteError(
+        "Your starting point and destination are the same. Please choose different locations."
+      );
       return;
     }
 
@@ -52,10 +75,11 @@ export default function App() {
         const [destinationLat, destinationLng] =
           destination.coordinates;
 
+        // OSRM expects longitude,latitude coordinate order.
         const url =
-          `https://router.project-osrm.org/route/v1/driving/` +
+          "https://router.project-osrm.org/route/v1/driving/" +
           `${originLng},${originLat};${destinationLng},${destinationLat}` +
-          `?overview=full&geometries=geojson`;
+          "?overview=full&geometries=geojson";
 
         const response = await fetch(url, {
           signal: controller.signal,
@@ -63,7 +87,7 @@ export default function App() {
 
         if (!response.ok) {
           throw new Error(
-            "The routing service could not be reached."
+            "The routing service is unavailable. Please try again."
           );
         }
 
@@ -71,13 +95,14 @@ export default function App() {
 
         if (data.code !== "Ok" || !data.routes?.length) {
           throw new Error(
-            "No road route was found between these locations."
+            "No road route was found. Try selecting different locations."
           );
         }
 
         const route = data.routes[0];
 
-        // GeoJSON coordinates use [longitude, latitude].
+        // Convert GeoJSON [longitude, latitude] into Leaflet
+        // [latitude, longitude] coordinates.
         const points = route.geometry.coordinates.map(
           ([longitude, latitude]) => [latitude, longitude]
         );
@@ -105,6 +130,7 @@ export default function App() {
     return () => controller.abort();
   }, [origin, destination]);
 
+  // Handle clicks directly on the map.
   function handleMapClick(coordinates) {
     const selectedPoint = {
       name: "Map-selected point",
@@ -121,6 +147,7 @@ export default function App() {
     setFocusPoint(coordinates);
   }
 
+  // Handle locations selected from search results.
   function handleSearchSelection(type, location) {
     if (type === "origin") {
       setOrigin(location);
@@ -131,6 +158,7 @@ export default function App() {
     setFocusPoint(location.coordinates);
   }
 
+  // Clear the selected locations and route.
   function resetLocations() {
     setOrigin(null);
     setDestination(null);
@@ -146,9 +174,10 @@ export default function App() {
   }
 
   function getLocationName(location) {
-    if (!location) return "Not selected";
-    return location.name;
+    return location?.name ?? "Not selected";
   }
+
+  const journeyReady = Boolean(origin && destination);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -195,8 +224,8 @@ export default function App() {
 
           <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
             Select your starting point and destination to explore a road
-            route and its estimated distance. Bus fare estimation is the
-            next step.
+            route, check its estimated distance, and calculate an
+            estimated bus fare.
           </p>
         </section>
 
@@ -206,6 +235,7 @@ export default function App() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
               <MapPin size={20} />
             </div>
+
             <div>
               <p className="text-sm font-semibold">Starting point</p>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -218,6 +248,7 @@ export default function App() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
               <Navigation size={20} />
             </div>
+
             <div>
               <p className="text-sm font-semibold">Destination</p>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -230,6 +261,7 @@ export default function App() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
               <Route size={20} />
             </div>
+
             <div>
               <p className="text-sm font-semibold">Road route</p>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -237,7 +269,9 @@ export default function App() {
                   ? "Calculated"
                   : routeStatus === "loading"
                     ? "Calculating..."
-                    : "Awaiting locations"}
+                    : routeStatus === "error"
+                      ? "Unavailable"
+                      : "Awaiting locations"}
               </p>
             </div>
           </div>
@@ -259,7 +293,7 @@ export default function App() {
                   </h3>
                 </div>
 
-                <p className="mt-1 text-sm leading-6 text-slate-500">
+                <p className="mt-1 text-sm text-slate-500">
                   Search for a place or click two points on the map.
                 </p>
               </div>
@@ -289,9 +323,11 @@ export default function App() {
                 size={17}
                 className="mt-0.5 shrink-0 text-slate-400"
               />
+
               <p className="text-xs leading-5 text-slate-500">
-                OpenStreetMap data. Click once to select your starting
-                point, then click again to select your destination.
+                Map data © OpenStreetMap contributors. Click once to
+                select your starting point, then click again to select
+                your destination.
               </p>
             </div>
           </section>
@@ -361,9 +397,19 @@ export default function App() {
                   </p>
                 </div>
               </div>
+
+              {journeyReady && (
+                <button
+                  type="button"
+                  onClick={resetLocations}
+                  className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                >
+                  Clear journey
+                </button>
+              )}
             </section>
 
-            {/* Route results */}
+            {/* Route overview */}
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center gap-2">
                 <Navigation
@@ -378,8 +424,8 @@ export default function App() {
               {routeStatus === "idle" && (
                 <div className="mt-4 rounded-2xl bg-slate-50 p-4">
                   <p className="text-sm leading-6 text-slate-600">
-                    Select both locations to see your road distance and
-                    estimated driving time.
+                    Select both locations to see the estimated road
+                    distance and driving time.
                   </p>
                 </div>
               )}
@@ -406,6 +452,7 @@ export default function App() {
                   <p className="text-sm font-semibold text-red-700">
                     Could not calculate route
                   </p>
+
                   <p className="mt-1 text-sm leading-6 text-red-600">
                     {routeError}
                   </p>
@@ -413,27 +460,40 @@ export default function App() {
               )}
 
               {routeStatus === "success" && (
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-emerald-50 p-4">
-                    <p className="text-xs font-semibold text-emerald-800 sm:text-sm">
-                      Road distance
-                    </p>
-                    <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
-                      {distanceKm.toFixed(2)}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">km</p>
+                <>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-emerald-50 p-4">
+                      <p className="text-xs font-semibold text-emerald-800 sm:text-sm">
+                        Road distance
+                      </p>
+
+                      <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
+                        {distanceKm.toFixed(2)}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">km</p>
+                    </div>
+
+                    <div className="rounded-2xl bg-blue-50 p-4">
+                      <p className="text-xs font-semibold text-blue-800 sm:text-sm">
+                        Driving time
+                      </p>
+
+                      <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
+                        {Math.round(durationMinutes)}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        minutes
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl bg-blue-50 p-4">
-                    <p className="text-xs font-semibold text-blue-800 sm:text-sm">
-                      Driving time
-                    </p>
-                    <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
-                      {Math.round(durationMinutes)}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">minutes</p>
+                  <div className="mt-3 flex items-center gap-2 text-sm text-emerald-700">
+                    <CheckCircle2 size={17} />
+                    Route calculated successfully
                   </div>
-                </div>
+                </>
               )}
 
               <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 p-3">
@@ -441,6 +501,7 @@ export default function App() {
                   size={16}
                   className="mt-0.5 shrink-0 text-slate-400"
                 />
+
                 <p className="text-xs leading-5 text-slate-500">
                   Driving time is an estimate, not a bus timetable.
                   Actual bus routes, stops, traffic, and travel times
@@ -449,36 +510,18 @@ export default function App() {
               </div>
             </section>
 
-            {/* Fare placeholder */}
-            <section className="relative overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-lg shadow-slate-900/10">
-              <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-emerald-500/15 blur-3xl" />
-
-              <div className="relative">
-                <div className="flex items-center gap-2 text-emerald-300">
-                  <Bus size={19} />
-                  <p className="text-sm font-semibold">
-                    Estimated bus fare
-                  </p>
-                </div>
-
-                <p className="mt-4 text-4xl font-extrabold tracking-tight">
-                  ৳ --
-                </p>
-
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  Your fare estimate will appear here when we add bus
-                  categories and per-kilometre fare rules.
-                </p>
-
-                <div className="mt-5 flex items-center gap-2 border-t border-white/10 pt-4 text-xs text-slate-400">
-                  <Sparkles size={15} />
-                  Fare calculator coming next
-                </div>
-              </div>
-            </section>
+            {/* Bus fare calculator */}
+            <FareSummary
+              distanceKm={
+                routeStatus === "success" ? distanceKm : null
+              }
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+            />
           </div>
         </div>
 
+        {/* Footer */}
         <footer className="mt-10 border-t border-slate-200 py-5">
           <p className="text-center text-xs leading-6 text-slate-500">
             Bus Fare BD · A route and fare estimation project for
