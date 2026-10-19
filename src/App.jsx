@@ -10,6 +10,7 @@ import {
   Clock3,
   MapPinned,
   ArrowRight,
+  ArrowUpDown,
   Sparkles,
   CheckCircle2,
 } from "lucide-react";
@@ -34,7 +35,7 @@ export default function App() {
     fareRates[0]?.id ?? ""
   );
 
-  // Calculate the road route whenever the selected locations change.
+  // Calculate a road route whenever both locations change.
   useEffect(() => {
     if (!origin || !destination) {
       setRouteCoordinates([]);
@@ -45,7 +46,6 @@ export default function App() {
       return;
     }
 
-    // Avoid requesting a route from a point to itself.
     const sameLocation =
       origin.coordinates[0] === destination.coordinates[0] &&
       origin.coordinates[1] === destination.coordinates[1];
@@ -75,7 +75,6 @@ export default function App() {
         const [destinationLat, destinationLng] =
           destination.coordinates;
 
-        // OSRM expects longitude,latitude coordinate order.
         const url =
           "https://router.project-osrm.org/route/v1/driving/" +
           `${originLng},${originLat};${destinationLng},${destinationLat}` +
@@ -101,8 +100,6 @@ export default function App() {
 
         const route = data.routes[0];
 
-        // Convert GeoJSON [longitude, latitude] into Leaflet
-        // [latitude, longitude] coordinates.
         const points = route.geometry.coordinates.map(
           ([longitude, latitude]) => [latitude, longitude]
         );
@@ -130,7 +127,7 @@ export default function App() {
     return () => controller.abort();
   }, [origin, destination]);
 
-  // Handle clicks directly on the map.
+  // Select a point directly on the map.
   function handleMapClick(coordinates) {
     const selectedPoint = {
       name: "Map-selected point",
@@ -147,7 +144,7 @@ export default function App() {
     setFocusPoint(coordinates);
   }
 
-  // Handle locations selected from search results.
+  // Select a location from the search component.
   function handleSearchSelection(type, location) {
     if (type === "origin") {
       setOrigin(location);
@@ -158,7 +155,18 @@ export default function App() {
     setFocusPoint(location.coordinates);
   }
 
-  // Clear the selected locations and route.
+  // Swap origin and destination.
+  function swapLocations() {
+    if (!origin || !destination) return;
+
+    setOrigin(destination);
+    setDestination(origin);
+
+    // Focus the map on the new starting point.
+    setFocusPoint(destination.coordinates);
+  }
+
+  // Clear the selected journey.
   function resetLocations() {
     setOrigin(null);
     setDestination(null);
@@ -235,7 +243,6 @@ export default function App() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
               <MapPin size={20} />
             </div>
-
             <div>
               <p className="text-sm font-semibold">Starting point</p>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -248,7 +255,6 @@ export default function App() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
               <Navigation size={20} />
             </div>
-
             <div>
               <p className="text-sm font-semibold">Destination</p>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -261,7 +267,6 @@ export default function App() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
               <Route size={20} />
             </div>
-
             <div>
               <p className="text-sm font-semibold">Road route</p>
               <p className="mt-0.5 text-xs text-slate-500">
@@ -279,20 +284,16 @@ export default function App() {
 
         {/* Main layout */}
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.85fr)]">
-          {/* Map panel */}
+          {/* Map */}
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
               <div>
                 <div className="flex items-center gap-2">
-                  <MapPinned
-                    size={20}
-                    className="text-emerald-600"
-                  />
+                  <MapPinned size={20} className="text-emerald-600" />
                   <h3 className="text-lg font-bold tracking-tight">
                     Explore the map
                   </h3>
                 </div>
-
                 <p className="mt-1 text-sm text-slate-500">
                   Search for a place or click two points on the map.
                 </p>
@@ -323,7 +324,6 @@ export default function App() {
                 size={17}
                 className="mt-0.5 shrink-0 text-slate-400"
               />
-
               <p className="text-xs leading-5 text-slate-500">
                 Map data © OpenStreetMap contributors. Click once to
                 select your starting point, then click again to select
@@ -363,21 +363,27 @@ export default function App() {
                       From
                     </p>
                   </div>
-
                   <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-800">
                     {getLocationName(origin)}
                   </p>
-
                   <p className="mt-1 break-words text-xs text-slate-500">
                     {formatCoordinates(origin)}
                   </p>
                 </div>
 
+                {/* Swap button */}
                 <div className="flex justify-center">
-                  <ArrowRight
-                    size={18}
-                    className="rotate-90 text-slate-400"
-                  />
+                  <button
+                    type="button"
+                    onClick={swapLocations}
+                    disabled={!journeyReady}
+                    title="Swap starting point and destination"
+                    aria-label="Swap starting point and destination"
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ArrowUpDown size={16} />
+                    Swap locations
+                  </button>
                 </div>
 
                 <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
@@ -387,11 +393,9 @@ export default function App() {
                       To
                     </p>
                   </div>
-
                   <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-800">
                     {getLocationName(destination)}
                   </p>
-
                   <p className="mt-1 break-words text-xs text-slate-500">
                     {formatCoordinates(destination)}
                   </p>
@@ -412,10 +416,7 @@ export default function App() {
             {/* Route overview */}
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center gap-2">
-                <Navigation
-                  size={19}
-                  className="text-emerald-600"
-                />
+                <Navigation size={19} className="text-emerald-600" />
                 <h3 className="text-lg font-bold tracking-tight">
                   Route overview
                 </h3>
@@ -431,10 +432,7 @@ export default function App() {
               )}
 
               {routeStatus === "loading" && (
-                <div
-                  role="status"
-                  className="mt-4 rounded-2xl bg-emerald-50 p-4"
-                >
+                <div role="status" className="mt-4 rounded-2xl bg-emerald-50 p-4">
                   <div className="flex items-center gap-3">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
                     <p className="text-sm font-medium text-emerald-800">
@@ -445,14 +443,10 @@ export default function App() {
               )}
 
               {routeStatus === "error" && (
-                <div
-                  role="alert"
-                  className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4"
-                >
+                <div role="alert" className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
                   <p className="text-sm font-semibold text-red-700">
                     Could not calculate route
                   </p>
-
                   <p className="mt-1 text-sm leading-6 text-red-600">
                     {routeError}
                   </p>
@@ -466,11 +460,9 @@ export default function App() {
                       <p className="text-xs font-semibold text-emerald-800 sm:text-sm">
                         Road distance
                       </p>
-
                       <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
                         {distanceKm.toFixed(2)}
                       </p>
-
                       <p className="mt-1 text-xs text-slate-500">km</p>
                     </div>
 
@@ -478,11 +470,9 @@ export default function App() {
                       <p className="text-xs font-semibold text-blue-800 sm:text-sm">
                         Driving time
                       </p>
-
                       <p className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900">
                         {Math.round(durationMinutes)}
                       </p>
-
                       <p className="mt-1 text-xs text-slate-500">
                         minutes
                       </p>
@@ -497,11 +487,7 @@ export default function App() {
               )}
 
               <div className="mt-4 flex items-start gap-2 rounded-xl border border-slate-200 p-3">
-                <Clock3
-                  size={16}
-                  className="mt-0.5 shrink-0 text-slate-400"
-                />
-
+                <Clock3 size={16} className="mt-0.5 shrink-0 text-slate-400" />
                 <p className="text-xs leading-5 text-slate-500">
                   Driving time is an estimate, not a bus timetable.
                   Actual bus routes, stops, traffic, and travel times
@@ -510,7 +496,7 @@ export default function App() {
               </div>
             </section>
 
-            {/* Bus fare calculator */}
+            {/* Fare calculator */}
             <FareSummary
               distanceKm={
                 routeStatus === "success" ? distanceKm : null
