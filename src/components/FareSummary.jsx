@@ -1,193 +1,254 @@
 
+import { useEffect } from "react";
 import {
   Bus,
+  Check,
   TrendingUp,
-  Calculator,
   Info,
-  ShieldAlert,
+  MapPin,
 } from "lucide-react";
-
 import {
   fareRates,
   calculateFare,
   formatTaka,
 } from "../data/fareRates";
 
+const LONG_DISTANCE_LIMIT_KM = 45;
+const LONG_DISTANCE_CATEGORY = "intercity";
+
 export default function FareSummary({
   distanceKm,
   selectedCategory,
   onCategoryChange,
 }) {
-  const selectedBus = fareRates.find(
-    (bus) => bus.id === selectedCategory
+  const canCalculate =
+    Number.isFinite(distanceKm) && distanceKm > 0;
+
+  const isLongDistance =
+    canCalculate && distanceKm > LONG_DISTANCE_LIMIT_KM;
+
+  // Only show long-distance buses when the journey exceeds 45 km.
+  const availableRates = isLongDistance
+    ? fareRates.filter((bus) => bus.id === LONG_DISTANCE_CATEGORY)
+    : fareRates;
+
+  // Automatically select the long-distance category for longer journeys.
+  useEffect(() => {
+    if (isLongDistance && selectedCategory !== LONG_DISTANCE_CATEGORY) {
+      onCategoryChange(LONG_DISTANCE_CATEGORY);
+    }
+  }, [isLongDistance, selectedCategory, onCategoryChange]);
+
+  const effectiveCategory = isLongDistance
+    ? LONG_DISTANCE_CATEGORY
+    : selectedCategory;
+
+  const selectedBus = availableRates.find(
+    (bus) => bus.id === effectiveCategory
   );
 
-  const validDistance =
-    typeof distanceKm === "number" &&
-    Number.isFinite(distanceKm) &&
-    distanceKm > 0;
-
-  const previousFare =
-    validDistance && selectedBus
-      ? calculateFare(distanceKm, selectedBus.previousRate)
-      : null;
-
-  const currentFare =
-    validDistance && selectedBus
+  const selectedFare =
+    canCalculate && selectedBus
       ? calculateFare(distanceKm, selectedBus.currentRate)
       : null;
 
-  const fareDifference =
-    previousFare !== null && currentFare !== null
-      ? currentFare - previousFare
+  const previousFare =
+    canCalculate && selectedBus
+      ? calculateFare(distanceKm, selectedBus.previousRate)
       : null;
 
-  const canCalculate =
-    validDistance &&
-    selectedBus !== undefined &&
-    previousFare !== null &&
-    currentFare !== null;
+  const difference =
+    selectedFare !== null && previousFare !== null
+      ? selectedFare - previousFare
+      : null;
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-slate-950 text-white shadow-lg shadow-slate-900/10">
-      <div className="relative p-5 sm:p-6">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-500/15 blur-3xl" />
-
-        <div className="relative">
-          {/* Heading */}
-          <div className="flex items-center gap-2 text-emerald-300">
-            <Bus size={21} />
-            <h3 className="text-lg font-bold tracking-tight">
-              Bus Fare Calculator
-            </h3>
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5 sm:p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <Bus size={22} />
           </div>
-
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            Compare estimated fares using the previous and current
-            rates entered for this project.
-          </p>
-
-          {/* Bus category selector */}
-          <label
-            htmlFor="bus-category"
-            className="mt-5 block text-sm font-semibold text-slate-200"
-          >
-            Select bus category
-          </label>
-
-          <select
-            id="bus-category"
-            value={selectedCategory}
-            onChange={(event) =>
-              onCategoryChange(event.target.value)
-            }
-            className="mt-2 w-full rounded-xl border border-white/15 bg-slate-900 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20"
-          >
-            {fareRates.map((bus) => (
-              <option key={bus.id} value={bus.id}>
-                {bus.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Results */}
-          {canCalculate ? (
-            <>
-              <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-white/[0.06] p-5">
-                <div className="flex items-center gap-2 text-sm text-emerald-300">
-                  <Calculator size={16} />
-                  Current-rate estimate
-                </div>
-
-                <p className="mt-3 break-words text-3xl font-extrabold tracking-tight sm:text-4xl">
-                  {formatTaka(currentFare)}
-                </p>
-
-                <p className="mt-3 text-sm text-slate-300">
-                  {distanceKm.toFixed(2)} km ×{" "}
-                  {formatTaka(selectedBus.currentRate)}/km
-                </p>
-
-                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
-                  <TrendingUp size={14} />
-                  Estimated fare for one journey
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white/[0.06] p-4">
-                  <p className="text-xs leading-5 text-slate-400">
-                    Previous-rate estimate
-                  </p>
-
-                  <p className="mt-2 break-words text-xl font-bold">
-                    {formatTaka(previousFare)}
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    {formatTaka(selectedBus.previousRate)}/km
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-emerald-500/10 p-4">
-                  <p className="text-xs leading-5 text-emerald-300">
-                    Estimated increase
-                  </p>
-
-                  <p className="mt-2 break-words text-xl font-bold text-emerald-300">
-                    +{formatTaka(fareDifference)}
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    Compared with the previous rate
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/10 p-3">
-                <Info
-                  size={17}
-                  className="mt-0.5 shrink-0 text-emerald-300"
-                />
-
-                <p className="text-xs leading-5 text-slate-300">
-                  Calculation: estimated road distance × rate per
-                  kilometre. The result is a mathematical estimate,
-                  not a confirmed ticket price.
-                </p>
-              </div>
-            </>
-          ) : (
-            <div className="mt-5 rounded-2xl border border-dashed border-white/20 p-5">
-              <p className="text-2xl font-extrabold">৳ --</p>
-
-              <p className="mt-2 text-sm leading-6 text-slate-400">
-                Select a starting point and destination and wait for
-                a successful route calculation to see your estimated
-                fare.
-              </p>
-            </div>
-          )}
-
-          {/* Important notice */}
-          <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300/20 bg-amber-400/[0.06] p-3">
-            <ShieldAlert
-              size={17}
-              className="mt-0.5 shrink-0 text-amber-300"
-            />
-
-            <p className="text-xs leading-5 text-slate-300">
-              <span className="font-semibold text-amber-200">
-                Prototype rates:
-              </span>{" "}
-              The rates currently used by this project have not been
-              verified here against the applicable official fare
-              schedule. Actual fares may differ because of minimum
-              fares, rounding rules, route distance, and bus
-              operations.
+          <div>
+            <h3 className="text-lg font-bold tracking-tight">
+              Bus fare comparison
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Compare estimated fares for your journey
             </p>
           </div>
         </div>
+
+        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+          {canCalculate
+            ? `${distanceKm.toFixed(2)} km journey`
+            : "Waiting for route"}
+        </span>
+      </div>
+
+      <div className="p-5 sm:p-6">
+        {!canCalculate ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 px-5 py-8 text-center">
+            <MapPin size={26} className="mx-auto text-slate-400" />
+            <p className="mt-3 font-semibold text-slate-800">
+              Calculate a route first
+            </p>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
+              Choose your starting point and destination to see the
+              available bus categories and estimated fares.
+            </p>
+          </div>
+        ) : (
+          <>
+            {isLongDistance && (
+              <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <Info size={19} className="mt-0.5 shrink-0 text-amber-700" />
+                <div>
+                  <p className="text-sm font-bold text-amber-900">
+                    Long-distance journey
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-amber-800">
+                    This journey is longer than 45 km. Only the
+                    Inter-District / Long-Distance Bus category is
+                    available under your project's rules.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl bg-slate-950 p-5 text-white sm:flex sm:items-center sm:justify-between sm:gap-5">
+              <div>
+                <div className="flex items-center gap-2 text-emerald-300">
+                  <Check size={16} />
+                  <p className="text-sm font-semibold">
+                    {isLongDistance
+                      ? "Required bus category"
+                      : "Selected bus category"}
+                  </p>
+                </div>
+
+                <p className="mt-2 text-base font-bold">
+                  {selectedBus?.name ?? "Select a category"}
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Estimated fare using the configured rate
+                </p>
+              </div>
+
+              <div className="mt-4 sm:mt-0 sm:text-right">
+                <p className="text-3xl font-extrabold tracking-tight">
+                  {selectedFare !== null
+                    ? formatTaka(selectedFare)
+                    : "—"}
+                </p>
+
+                {difference !== null && (
+                  <p className="mt-1 text-xs text-emerald-300">
+                    +{formatTaka(difference)} vs previous-rate estimate
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {availableRates.map((bus) => {
+                const isSelected = bus.id === effectiveCategory;
+                const currentFare = calculateFare(
+                  distanceKm,
+                  bus.currentRate
+                );
+                const oldFare = calculateFare(
+                  distanceKm,
+                  bus.previousRate
+                );
+                const fareDifference = currentFare - oldFare;
+
+                return (
+                  <button
+                    key={bus.id}
+                    type="button"
+                    onClick={() => onCategoryChange(bus.id)}
+                    aria-pressed={isSelected}
+                    className={`relative flex min-w-0 flex-col rounded-2xl border p-4 text-left transition duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                      isSelected
+                        ? "border-emerald-500 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-500"
+                        : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-sm"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                          isSelected
+                            ? "bg-emerald-600 text-white"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        <Bus size={16} />
+                      </span>
+
+                      {isSelected && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800">
+                          <Check size={11} />
+                          Selected
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="mt-3 min-h-10 text-sm font-bold leading-5 text-slate-800">
+                      {bus.name}
+                    </p>
+
+                    <p className="mt-3 text-xs text-slate-500">
+                      Current-rate estimate
+                    </p>
+                    <p className="mt-1 break-words text-xl font-extrabold tracking-tight text-slate-950">
+                      {formatTaka(currentFare)}
+                    </p>
+
+                    <div className="mt-3 border-t border-slate-200/80 pt-3">
+                      <p className="text-xs text-slate-500">
+                        Previous-rate estimate
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {formatTaka(oldFare)}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                      <TrendingUp size={13} />
+                      +{formatTaka(fareDifference)}
+                    </div>
+
+                    <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                      {formatTaka(bus.currentRate)} per km
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <Info size={17} className="mt-0.5 shrink-0 text-slate-500" />
+              <div>
+                <p className="text-sm font-semibold text-slate-800">
+                  How is the fare estimated?
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
+                  Estimated fare = road distance × rate per kilometre.
+                  Actual fares can differ because of official fare rules,
+                  minimum fares, rounding, routes, and operator practices.
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs leading-5 text-slate-400">
+              The 45 km threshold is a rule configured for this project.
+              The rates and distance eligibility should be verified against
+              official transport regulations before real-world use.
+            </p>
+          </>
+        )}
       </div>
     </section>
   );
