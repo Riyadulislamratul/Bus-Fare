@@ -23,6 +23,7 @@ import MapView from "./components/MapView";
 import LocationSearch from "./components/LocationSearch";
 import FareSummary from "./components/FareSummary";
 import { fareRates, calculateFare, formatTaka } from "./data/fareRates";
+import BusRouteFinder from "./components/BusRouteFinder";
 
 const HISTORY_KEY = "bus-fare-bd-journey-history";
 const MAX_HISTORY = 10;
@@ -420,7 +421,7 @@ export default function App() {
             Map data © OpenStreetMap contributors.
           </div>
         </section>
-
+<BusRouteFinder />
         {/* Balanced results dashboard */}
         <section className="grid items-start gap-6 lg:grid-cols-2">
           {/* Journey details */}

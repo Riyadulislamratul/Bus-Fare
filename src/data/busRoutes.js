@@ -3,12 +3,13 @@
  * Bus Fare BD — Bus route database
  *
  * IMPORTANT:
- * - Sample routes are research leads, not a complete national database.
- * - "unverified" means the route needs confirmation with the operator
- *   or another reliable, current source.
- * - Keep route stops in travel order.
- * - Add routes as separate records when the same operator serves
- *   different corridors or directions.
+ * - This is a starter dataset, not complete nationwide coverage.
+ * - Route listings need current verification.
+ * - Local routes below allow reverse-direction matching as a
+ *   provisional assumption. Confirm that return services operate.
+ * - Intercity endpoint-only records do not allow reverse matching
+ *   until the return service has been verified.
+ * - Source URLs must be plain URLs, not Markdown links.
  */
 
 export const busRoutes = [
@@ -19,6 +20,7 @@ export const busRoutes = [
     serviceType: "city",
     region: "Dhaka and Gazipur",
     direction: "Motijheel to Shib Bari",
+    allowReverseDirection: true,
     stops: [
       "Motijheel",
       "Paltan",
@@ -54,8 +56,10 @@ export const busRoutes = [
     sourceUrl:
       "https://dhakabusservice.com/bus/gazipur-paribahan-bus-route/",
     verificationStatus: "unverified",
-    notes: "Published route listing; confirm current stops and endpoints.",
+    notes:
+      "Published route listing. Reverse-direction matching is provisional; confirm current service and stops.",
   },
+
   {
     id: "dhaka-basumati-gabtoli-gazipur",
     operator: "Basumati Transport",
@@ -63,6 +67,7 @@ export const busRoutes = [
     serviceType: "city",
     region: "Dhaka and Gazipur",
     direction: "Gabtoli to Gazipur Chourasta",
+    allowReverseDirection: true,
     stops: [
       "Gabtoli",
       "Mirpur 1",
@@ -92,8 +97,10 @@ export const busRoutes = [
     sourceUrl:
       "https://dhakabusservice.com/bus/basumati-transport-bus-route/",
     verificationStatus: "unverified",
-    notes: "Published route listing; confirm current stops and endpoints.",
+    notes:
+      "Published route listing. Reverse-direction matching is provisional; confirm current service and stops.",
   },
+
   {
     id: "dhaka-vip-azimpur-gazipur",
     operator: "VIP",
@@ -101,6 +108,7 @@ export const busRoutes = [
     serviceType: "city",
     region: "Dhaka and Gazipur",
     direction: "Azimpur to Gazipur Chourasta",
+    allowReverseDirection: true,
     stops: [
       "Azimpur",
       "Nilkhet",
@@ -128,11 +136,10 @@ export const busRoutes = [
     sourceUrl:
       "https://joynto1.github.io/dhaka_local_bus/bus_routes/vip.html",
     verificationStatus: "unverified",
-    notes: "Third-party route dataset; confirm with current operator information.",
+    notes:
+      "Third-party route dataset. Reverse-direction matching is provisional; verify with the operator.",
   },
 
-  // BRTC examples based on the operator's published passenger-service page.
-  // They are endpoint-to-endpoint records, not complete intermediate-stop lists.
   {
     id: "brtc-dhaka-khulna",
     operator: "Bangladesh Road Transport Corporation (BRTC)",
@@ -140,12 +147,15 @@ export const busRoutes = [
     serviceType: "intercity",
     region: "Dhaka and Khulna",
     direction: "Dhaka to Khulna",
+    allowReverseDirection: false,
     stops: ["Dhaka", "Khulna"],
-    sourceUrl: "https://brtc.gov.bd/pages/static-pages/6922e0e1933eb65569e29008",
+    sourceUrl:
+      "https://brtc.gov.bd/pages/static-pages/6922e0e1933eb65569e29008",
     verificationStatus: "needs_review",
     notes:
-      "Published service endpoints only; intermediate stops and current schedule need verification.",
+      "Endpoint-only record. Intermediate stops and reverse service need verification.",
   },
+
   {
     id: "brtc-dhaka-lakshmipur",
     operator: "Bangladesh Road Transport Corporation (BRTC)",
@@ -153,21 +163,22 @@ export const busRoutes = [
     serviceType: "intercity",
     region: "Dhaka and Lakshmipur",
     direction: "Dhaka to Lakshmipur",
+    allowReverseDirection: false,
     stops: ["Dhaka", "Lakshmipur"],
-    sourceUrl: "https://brtc.portal.gov.bd/pages/static-pages/যাত্রী-পরিবহন-সেবা-e84539-6922e0e1933eb65569e29008",
+    sourceUrl:
+      "https://brtc.portal.gov.bd/pages/static-pages/যাত্রী-পরিবহন-সেবা-e84539-6922e0e1933eb65569e29008",
     verificationStatus: "needs_review",
     notes:
-      "Published service endpoints only; verify current service details before relying on this route.",
+      "Endpoint-only record. Verify current service, intermediate stops and return journey.",
   },
 ];
 
 /**
- * Normalize names so that capitalization and extra spaces don't prevent
- * matching. This intentionally does not assume that similar names are
- * always the same physical stop.
+ * Normalize names so differences in capitalization, spacing,
+ * and common dash characters do not prevent a match.
  */
 export function normalizeStopName(value = "") {
-  return value
+  return String(value)
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[–—-]/g, " ")
@@ -176,6 +187,9 @@ export function normalizeStopName(value = "") {
     .trim();
 }
 
+/**
+ * Return unique stop names for the dropdown selectors.
+ */
 export function getAllStops(routes = busRoutes) {
   const uniqueStops = new Map();
 
@@ -195,44 +209,94 @@ export function getAllStops(routes = busRoutes) {
 }
 
 /**
- * Finds a direct bus only when the origin and destination appear in
- * the right order on the same route.
+ * Find direct routes in either direction.
  *
- * This first version uses exact normalized stop names. It does not
- * infer that two differently named stops are geographically identical.
+ * Forward:
+ *   Board Bazar -> Gazipur Chourasta
+ *
+ * Reverse (only when allowReverseDirection is true):
+ *   Board Bazar -> House Building
+ *
+ * The returned stopsBetween array always follows the user's
+ * selected origin-to-destination direction.
  */
-export function findDirectBuses(origin, destination, routes = busRoutes) {
+export function findDirectBuses(
+  origin,
+  destination,
+  routes = busRoutes
+) {
   const originKey = normalizeStopName(origin);
   const destinationKey = normalizeStopName(destination);
 
-  if (!originKey || !destinationKey || originKey === destinationKey) {
+  if (
+    !originKey ||
+    !destinationKey ||
+    originKey === destinationKey
+  ) {
     return [];
   }
 
   return routes
     .map((route) => {
       const normalizedStops = route.stops.map(normalizeStopName);
-      const originIndex = normalizedStops.indexOf(originKey);
-      const destinationIndex = normalizedStops.indexOf(destinationKey);
 
-      if (
-        originIndex === -1 ||
-        destinationIndex === -1 ||
-        destinationIndex <= originIndex
-      ) {
+      const originIndex = normalizedStops.indexOf(originKey);
+      const destinationIndex =
+        normalizedStops.indexOf(destinationKey);
+
+      // Both stops must exist in this route.
+      if (originIndex === -1 || destinationIndex === -1) {
         return null;
       }
 
-      return {
-        ...route,
-        boardingStop: route.stops[originIndex],
-        dropoffStop: route.stops[destinationIndex],
-        stopsBetween: route.stops.slice(
-          originIndex,
-          destinationIndex + 1
-        ),
-        stopCount: destinationIndex - originIndex + 1,
-      };
+      // Forward direction: destination occurs after origin.
+      if (destinationIndex > originIndex) {
+        return {
+          ...route,
+          boardingStop: route.stops[originIndex],
+          dropoffStop: route.stops[destinationIndex],
+          stopsBetween: route.stops.slice(
+            originIndex,
+            destinationIndex + 1
+          ),
+          stopCount: destinationIndex - originIndex + 1,
+          matchedDirection: "forward",
+        };
+      }
+
+      // Reverse direction is permitted only for explicitly enabled routes.
+      if (route.allowReverseDirection === true) {
+        const reverseStops = [...route.stops].reverse();
+        const reverseNormalized = reverseStops.map(normalizeStopName);
+
+        const reverseOriginIndex =
+          reverseNormalized.indexOf(originKey);
+
+        const reverseDestinationIndex =
+          reverseNormalized.indexOf(destinationKey);
+
+        if (
+          reverseOriginIndex !== -1 &&
+          reverseDestinationIndex > reverseOriginIndex
+        ) {
+          return {
+            ...route,
+            boardingStop: reverseStops[reverseOriginIndex],
+            dropoffStop: reverseStops[reverseDestinationIndex],
+            stopsBetween: reverseStops.slice(
+              reverseOriginIndex,
+              reverseDestinationIndex + 1
+            ),
+            stopCount:
+              reverseDestinationIndex - reverseOriginIndex + 1,
+            matchedDirection: "reverse",
+            matchedDirectionNote:
+              "Reverse direction is provisional and requires verification.",
+          };
+        }
+      }
+
+      return null;
     })
     .filter(Boolean)
     .sort((a, b) => a.stopCount - b.stopCount);
